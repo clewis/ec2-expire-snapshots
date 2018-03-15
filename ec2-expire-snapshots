@@ -176,8 +176,11 @@ sub snapshots_for_volumes {
     my ($ec2,$volume_id_in_tag,@volume_ids) = @_;
 
     my @filters;
-    $volume_id_in_tag and push @filters, ['tag-key', $volume_id_in_tag];
-    @volume_ids       and push @filters, ['volume-id', @volume_ids];
+    if( defined( $volume_id_in_tag )) {
+        push @filters, ['tag:'.$volume_id_in_tag, @volume_ids];
+    } elsif( @volume_ids ) {
+        push @filters, ['volume-id', @volume_ids];
+    }
 
     $Debug and warn "$Prog: Retrieving snapshot list\n";
     my $snapshots;
@@ -190,7 +193,19 @@ sub snapshots_for_volumes {
 
     my %snapshots_for_volumes;
     foreach my $snapshot (@$snapshots) {
-      push @{$snapshots_for_volumes{$snapshot->volume_id}}, $snapshot;
+        my $this_volume_id = undef;
+        if( $volume_id_in_tag) {
+            for my $tagpair ( @{$snapshot->tag_set}) {
+                if( $tagpair->{'key'} eq $volume_id_in_tag ) {
+                    $this_volume_id = $tagpair->{'value'};
+                    last;
+                }
+            }
+        } else {
+            $this_volume_id = $snapshot->volume_id;
+        }
+
+        push @{$snapshots_for_volumes{$this_volume_id}}, $snapshot;
     }
 
     return \%snapshots_for_volumes;
